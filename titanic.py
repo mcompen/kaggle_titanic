@@ -1,5 +1,8 @@
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+
 import matplotlib.pyplot as plt
 import numpy as np
 import string
@@ -119,9 +122,10 @@ def replace_embark(df):
         return 3
 
 
-df['Embarked'] = df.apply(replace_embark, axis=1)
-df_test['Embarked'] = df_test.apply(replace_embark, axis=1)
-
+# df['Embarked'] = df.apply(replace_embark, axis=1)
+# df_test['Embarked'] = df_test.apply(replace_embark, axis=1)
+df.drop(columns='Embarked', inplace=True)
+df_test.drop(columns='Embarked', inplace=True)
 
 # Find all cabin letters
 def all_cabinletters(df):
@@ -161,8 +165,10 @@ def replace_cabinnumbers(df):
         return 8
 
 
-df['Cabin'] = df.apply(replace_cabinnumbers, axis=1)
-df_test['Cabin'] = df_test.apply(replace_cabinnumbers, axis=1)
+# df['Cabin'] = df.apply(replace_cabinnumbers, axis=1)
+# df_test['Cabin'] = df_test.apply(replace_cabinnumbers, axis=1)
+df.drop(columns='Cabin', inplace=True)
+df_test.drop(columns='Cabin', inplace=True)
 
 # Normalize fares and ages. Use median for missing values
 df['Fare'] = df['Fare'].fillna(df['Fare'].median())
@@ -179,20 +185,41 @@ df.drop(columns=['Ticket', 'Name', 'PassengerId'], inplace=True)
 test_PId = df_test['PassengerId'].to_numpy()
 df_test.drop(columns=['Ticket', 'Name', 'PassengerId'], inplace=True)
 
-y_train = df['Survived'].to_numpy()
-X_train = df.drop(columns='Survived', axis=1).to_numpy()
+y_train = df['Survived'].to_numpy()[1:500]
+X_train = df.drop(columns='Survived', axis=1).to_numpy()[1:500, :]
+y_mytest = df['Survived'].to_numpy()[501:890]
+X_mytest = df.drop(columns='Survived', axis=1).to_numpy()[501:890, :]
+
 X_test = df_test.to_numpy()
 
-print(df.columns)
-logreg = LogisticRegression()
+# Logistic Regression
+logreg = LogisticRegression(solver="lbfgs", tol=1e-6)
 logreg.fit(X_train, y_train)
-y_pred = logreg.predict(X_test)
+print("Training accuracy logreg: {}".format(logreg.score(X_train, y_train)))
+print("Test accuracy logreg : {}".format(logreg.score(X_mytest, y_mytest)))
 
-results = pd.DataFrame({
-        'PassengerId': test_PId,
-        'Survived': y_pred
-    })
+# Decision Tree
+dectree = DecisionTreeClassifier(random_state=0, max_depth=5)
+dectree.fit(X_train, y_train)
+from sklearn.tree import export_graphviz
+export_graphviz(dectree, out_file="tree.dot", feature_names=df.drop(columns='Survived', axis=1).columns)
+print("Training accuracy dectree: {}".format(dectree.score(X_train, y_train)))
+print("Test accuracy dectree : {}".format(dectree.score(X_mytest, y_mytest)))
+
+# Random Forest
+rforest = RandomForestClassifier(max_depth=5, n_estimators=1000, max_features=2, random_state=0)
+rforest.fit(X_train, y_train)
+print("Training accuracy rforest: {}".format(rforest.score(X_train, y_train)))
+print("Test accuracy rforest : {}".format(rforest.score(X_mytest, y_mytest)))
+# for feature in zip(df.drop(columns='Survived', axis=1).columns, rforest.feature_importances_):
+#     print(feature)
 
 
-#Any files you save will be available in the output tab below
+# Decision tree seems to work best. Now use entire training data
+dectree = DecisionTreeClassifier(max_depth=5)
+dectree.fit(df.drop(columns='Survived', axis=1), df['Survived'])
+y_pred = dectree.predict(X_test)
+
+# Save results to csv
+results = pd.DataFrame({'PassengerId': [(p + 892) for p in range(0, len(y_pred))], 'Survived': y_pred})
 results.to_csv('results.csv', index=False)
